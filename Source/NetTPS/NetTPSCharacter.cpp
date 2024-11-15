@@ -11,7 +11,9 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "MovieSceneTracksComponentTypes.h"
+#include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "MainUI.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -25,11 +27,11 @@ ANetTPSCharacter::ANetTPSCharacter()
 		
 	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
-	bUseControllerRotationYaw = true;
+	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
 	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = false; // Character moves in the direction of input...	
+	GetCharacterMovement()->bOrientRotationToMovement = true; // Character moves in the direction of input...	
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f); // ...at this rotation rate
 
 	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
@@ -44,8 +46,8 @@ ANetTPSCharacter::ANetTPSCharacter()
 	// Create a camera boom (pulls in towards the player if there is a collision)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->SetRelativeLocation(FVector(0,40,60));
-	CameraBoom->TargetArmLength = 150.0f; // The camera follows at this distance behind the character	
+	CameraBoom->SetRelativeLocation(FVector(0,0,60));
+	CameraBoom->TargetArmLength = 300.0f; // The camera follows at this distance behind the character	
 	CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
 
 	// Create a follow camera
@@ -66,6 +68,15 @@ void ANetTPSCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
+	InitMainUIWidget();
+	OriginCamPos = CameraBoom->GetRelativeLocation();
+}
+
+void ANetTPSCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	FVector pos = FMath::Lerp(CameraBoom->GetRelativeLocation(), OriginCamPos, DeltaTime * 10);
+	CameraBoom->SetRelativeLocation(pos);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -100,6 +111,9 @@ void ANetTPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 		// Fire Pistol
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &ANetTPSCharacter::Fire);
+
+		// Reload Pistol
+		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ANetTPSCharacter::Reload);
 	}
 	else
 	{
@@ -151,17 +165,23 @@ void ANetTPSCharacter::TakePistol()
 		TArray<AActor*> AllActors;
 		TArray<AActor*> PistolActors;
 		UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), AllActors);
+		AActor* ClosestPistol = nullptr;
+		float ClosestDist = std::numeric_limits<float>::max();
 		for (auto Actor : AllActors)
 		{
-			if (Actor->GetOwner() == nullptr)
+			if (Actor->GetOwner() == nullptr && Actor->GetName().Contains(TEXT("BP_Pistol")))
 			{
 				float dist = FVector::Dist(Actor->GetActorLocation(), GetActorLocation());
 				if (dist < distanceToGun)
 				{
-					AttachPistol(Actor);
-					break;
+					if(ClosestDist > dist)
+					{
+						ClosestDist = dist;
+						ClosestPistol = Actor;
+					}
 				}
 			}
+			AttachPistol(ClosestPistol);
 		}
 	}
 	else
@@ -182,6 +202,13 @@ void ANetTPSCharacter::AttachPistol(AActor* Pistol)
 		Pistol->SetOwner(this);
 		bHasPistol = true;
 		OwnedPistol = Pistol;
+		bUseControllerRotationYaw = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+		CameraBoom->TargetArmLength = 150;
+		OriginCamPos = FVector(0, 40, 60);
+
+		//crosshair show
+		MainUI->ShowCrossHair(true);
 	}
 }
 
@@ -198,6 +225,12 @@ void ANetTPSCharacter::DetachPistol()
 
 		bHasPistol = false;
 		OwnedPistol = nullptr;
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+		CameraBoom->TargetArmLength = 300;
+		OriginCamPos = FVector(0, 0, 60);
+
+		MainUI->ShowCrossHair(false);
 	}
 }
 
@@ -205,6 +238,11 @@ void ANetTPSCharacter::Fire()
 {
 	// if no gun is possesed, return
 	if(!bHasPistol) return;
+
+	if(CurrentBulletCount <= 0)return;
+
+	if(bIsReloading) return;
+	
 	// Find Collision point by LineTrace
 	FVector startPos = FollowCamera->GetComponentLocation();
 	FVector endPos = startPos + FollowCamera->GetForwardVector() * 100000;
@@ -219,4 +257,43 @@ void ANetTPSCharacter::Fire()
 		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), GunEffect, Hit.Location, FRotator::ZeroRotator, true);
 	}
 	PlayAnimMontage(FireMontage, 2, TEXT("Fire"));
+	CurrentBulletCount--;
+	if(CurrentBulletCount <= 0)
+	{
+		Reload();
+	}
+	MainUI->PopBullet(CurrentBulletCount);
+}
+
+void ANetTPSCharacter::Reload()
+{
+	if(!bHasPistol) return;
+
+	if(CurrentBulletCount == MaxBulletCount)return;
+
+	if(bIsReloading) return;
+	bIsReloading = true;
+	
+	PlayAnimMontage(FireMontage, 1, TEXT("Reload"));
+}
+
+void ANetTPSCharacter::ReloadFinish()
+{
+	for(int i = 0 ; i < MaxBulletCount - CurrentBulletCount ; i++)
+	{
+		MainUI->AddBullet();
+	}
+	CurrentBulletCount = MaxBulletCount;
+	bIsReloading = false;
+}
+
+void ANetTPSCharacter::InitMainUIWidget()
+{
+	MainUI = Cast<UMainUI>(CreateWidget(GetWorld(), MainUIClass));
+	MainUI->AddToViewport();
+	CurrentBulletCount = MaxBulletCount;
+	for(int i = 0; i < CurrentBulletCount; i++)
+	{
+		MainUI->AddBullet();
+	}
 }

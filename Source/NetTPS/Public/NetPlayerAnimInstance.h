@@ -9,7 +9,6 @@
 /**
  * 
  */
-DECLARE_DYNAMIC_DELEGATE(FOnPistolPickUP);
 UCLASS()
 class NETTPS_API UNetPlayerAnimInstance : public UAnimInstance
 {
@@ -31,5 +30,7 @@ public:
 	UPROPERTY()
 	class ANetTPSCharacter* player;
 
-	FOnPistolPickUP PistolPickUP;
+public:
+	UFUNCTION()
+	void AnimNotify_OnReloadFinish();
 };

@@ -43,12 +43,15 @@ class ANetTPSCharacter : public ACharacter
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
-
+	
 	UPROPERTY(EditAnywhere, Category = Input)
 	UInputAction* TakeAction;
 
 	UPROPERTY(EditAnywhere, Category = Input)
 	UInputAction* FireAction;
+
+	UPROPERTY(EditAnywhere, Category = Input)
+	UInputAction* ReloadAction;
 public:
 	ANetTPSCharacter();
 protected:
@@ -65,6 +68,14 @@ protected:
 	void DetachPistol();
 
 	void Fire();
+
+	void Reload();
+	
+	void InitMainUIWidget();
+
+public:
+	void ReloadFinish();
+	
 public:
 	UPROPERTY(EditAnywhere)
 	USceneComponent* CompGun;
@@ -75,6 +86,9 @@ public:
 	float distanceToGun = 200;
 
 	UPROPERTY(EditAnywhere)
+	FVector OriginCamPos;
+
+	UPROPERTY(EditAnywhere)
 	AActor* OwnedPistol = nullptr;
 
 	UPROPERTY(EditAnywhere)
@@ -82,17 +96,31 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	class UAnimMontage* FireMontage;
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<class UMainUI> MainUIClass;
+
+	UPROPERTY(EditAnywhere)
+	UMainUI* MainUI;
+
+	UPROPERTY(EditAnywhere)
+	float MaxBulletCount = 10;
+
+	float CurrentBulletCount = 0;
+
+	bool bIsReloading = false;
+	
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	
 	// To add mapping context
 	virtual void BeginPlay();
-
+	
+	virtual void Tick(float DeltaTime) override;
 public:
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 };
-
