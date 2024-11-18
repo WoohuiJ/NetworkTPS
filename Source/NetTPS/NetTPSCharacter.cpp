@@ -9,11 +9,14 @@
 #include "GameFramework/Controller.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "HealthBar.h"
 #include "InputActionValue.h"
 #include "MovieSceneTracksComponentTypes.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "MainUI.h"
+#include "Pistol.h"
+#include "Components/WidgetComponent.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -59,6 +62,9 @@ ANetTPSCharacter::ANetTPSCharacter()
 	CompGun->SetupAttachment(GetMesh(), TEXT("GunPosition"));
 	CompGun->SetRelativeLocation(FVector(-7.144f, 3.68f, 4.136f));
 	CompGun->SetRelativeRotation(FRotator(3.4f, 75.699f, 6.642f));
+
+	CompHP = CreateDefaultSubobject<UWidgetComponent>(TEXT("HP"));
+	CompHP->SetupAttachment(RootComponent);
 	
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
@@ -163,21 +169,26 @@ void ANetTPSCharacter::TakePistol()
 	if (bHasPistol == false)
 	{
 		TArray<AActor*> AllActors;
-		TArray<AActor*> PistolActors;
-		UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), AllActors);
-		AActor* ClosestPistol = nullptr;
-		float ClosestDist = std::numeric_limits<float>::max();
-		for (auto Actor : AllActors)
+		TArray<APistol*> PistolActors;
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), APistol::StaticClass(), AllActors);
+		for(auto Actor : AllActors)
 		{
-			if (Actor->GetOwner() == nullptr && Actor->GetName().Contains(TEXT("BP_Pistol")))
+			PistolActors.Add(Cast<APistol>(Actor));
+		}
+		APistol* ClosestPistol = nullptr;
+		float ClosestDist = std::numeric_limits<float>::max();
+		for (auto Pistol : PistolActors)
+		{
+			if (Pistol->GetOwner() == nullptr)
 			{
-				float dist = FVector::Dist(Actor->GetActorLocation(), GetActorLocation());
+				
+				float dist = FVector::Dist(Pistol->GetActorLocation(), GetActorLocation());
 				if (dist < distanceToGun)
 				{
 					if(ClosestDist > dist)
 					{
 						ClosestDist = dist;
-						ClosestPistol = Actor;
+						ClosestPistol = Pistol;
 					}
 				}
 			}
@@ -190,7 +201,7 @@ void ANetTPSCharacter::TakePistol()
 	}
 }
 
-void ANetTPSCharacter::AttachPistol(AActor* Pistol)
+void ANetTPSCharacter::AttachPistol(APistol* Pistol)
 {
 	if (!Pistol) return;
 
@@ -209,6 +220,7 @@ void ANetTPSCharacter::AttachPistol(AActor* Pistol)
 
 		//crosshair show
 		MainUI->ShowCrossHair(true);
+		InitBulletUI();
 	}
 }
 
@@ -220,9 +232,9 @@ void ANetTPSCharacter::DetachPistol()
 	if (comp)
 	{
 		comp->SetSimulatePhysics(true);
+		
 		OwnedPistol->DetachFromActor(FDetachmentTransformRules::KeepRelativeTransform);
 		OwnedPistol->SetOwner(nullptr);
-
 		bHasPistol = false;
 		OwnedPistol = nullptr;
 		bUseControllerRotationYaw = false;
@@ -230,7 +242,9 @@ void ANetTPSCharacter::DetachPistol()
 		CameraBoom->TargetArmLength = 300;
 		OriginCamPos = FVector(0, 0, 60);
 
+		MainUI->PopAllBullet();
 		MainUI->ShowCrossHair(false);
+		
 	}
 }
 
@@ -239,7 +253,7 @@ void ANetTPSCharacter::Fire()
 	// if no gun is possesed, return
 	if(!bHasPistol) return;
 
-	if(CurrentBulletCount <= 0)return;
+	if(OwnedPistol->CurrentBulletCount <= 0)return;
 
 	if(bIsReloading) return;
 	
@@ -255,21 +269,27 @@ void ANetTPSCharacter::Fire()
 	if(bHit)
 	{
 		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), GunEffect, Hit.Location, FRotator::ZeroRotator, true);
+
+		ANetTPSCharacter* Player = Cast<ANetTPSCharacter>(Hit.GetActor());
+		if(Player)
+		{
+			Player->DamageProcess(OwnedPistol->WeaponDamage);
+		}
 	}
 	PlayAnimMontage(FireMontage, 2, TEXT("Fire"));
-	CurrentBulletCount--;
-	if(CurrentBulletCount <= 0)
+	OwnedPistol->CurrentBulletCount--;
+	if(OwnedPistol->CurrentBulletCount <= 0)
 	{
 		Reload();
 	}
-	MainUI->PopBullet(CurrentBulletCount);
+	MainUI->PopBullet(OwnedPistol->CurrentBulletCount);
 }
 
 void ANetTPSCharacter::Reload()
 {
 	if(!bHasPistol) return;
 
-	if(CurrentBulletCount == MaxBulletCount)return;
+	if(OwnedPistol->CurrentBulletCount == OwnedPistol->MaxBulletCount)return;
 
 	if(bIsReloading) return;
 	bIsReloading = true;
@@ -279,21 +299,37 @@ void ANetTPSCharacter::Reload()
 
 void ANetTPSCharacter::ReloadFinish()
 {
-	for(int i = 0 ; i < MaxBulletCount - CurrentBulletCount ; i++)
+	OwnedPistol->Reload();
+	InitBulletUI();
+	bIsReloading = false;
+}
+
+void ANetTPSCharacter::InitBulletUI()
+{
+	MainUI->PopAllBullet();
+	for(int i = 0 ; i < OwnedPistol->CurrentBulletCount; i++)
 	{
 		MainUI->AddBullet();
 	}
-	CurrentBulletCount = MaxBulletCount;
-	bIsReloading = false;
 }
 
 void ANetTPSCharacter::InitMainUIWidget()
 {
 	MainUI = Cast<UMainUI>(CreateWidget(GetWorld(), MainUIClass));
 	MainUI->AddToViewport();
-	CurrentBulletCount = MaxBulletCount;
-	for(int i = 0; i < CurrentBulletCount; i++)
+	// CurrentBulletCount = MaxBulletCount;
+	// for(int i = 0; i < CurrentBulletCount; i++)
+	// {
+	// 	MainUI->AddBullet();
+	// }
+}
+
+void ANetTPSCharacter::DamageProcess(float Damage)
+{
+	UHealthBar* HPBar = Cast<UHealthBar>(CompHP->GetWidget());
+	float CurrentHP = HPBar->UpdateHPBar(Damage);
+	if(CurrentHP <= 0)
 	{
-		MainUI->AddBullet();
+		bIsDead = true;
 	}
 }

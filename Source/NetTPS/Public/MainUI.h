@@ -29,6 +29,8 @@ public:
 	void AddBullet();
 
 	void PopBullet(int32 index);
+
+	void PopAllBullet();
 protected:
 	virtual void NativeConstruct() override;
 };

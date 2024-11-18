@@ -18,6 +18,8 @@ void UNetPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	if(player)
 	{
+		bIsDead = player->bIsDead;
+		
 		bHasPistol = player->bHasPistol;
 		// dirV -> front, back
 		dirV = FVector::DotProduct(player->GetActorForwardVector(), player->GetVelocity());

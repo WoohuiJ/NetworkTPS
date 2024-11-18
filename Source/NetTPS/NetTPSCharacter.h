@@ -63,7 +63,7 @@ protected:
 
 	void TakePistol();
 
-	void AttachPistol(AActor* Pistol);
+	void AttachPistol(class APistol* Pistol);
 
 	void DetachPistol();
 
@@ -75,6 +75,9 @@ protected:
 
 public:
 	void ReloadFinish();
+
+	void InitBulletUI();
+	
 	
 public:
 	UPROPERTY(EditAnywhere)
@@ -89,7 +92,7 @@ public:
 	FVector OriginCamPos;
 
 	UPROPERTY(EditAnywhere)
-	AActor* OwnedPistol = nullptr;
+	class APistol* OwnedPistol = nullptr;
 
 	UPROPERTY(EditAnywhere)
 	class UParticleSystem* GunEffect;
@@ -109,7 +112,14 @@ public:
 	float CurrentBulletCount = 0;
 
 	bool bIsReloading = false;
+
+	//HealthBar UI Component
+	UPROPERTY(EditAnywhere)
+	class UWidgetComponent* CompHP;
 	
+	void DamageProcess(float Damage);
+	
+	bool bIsDead= false;
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

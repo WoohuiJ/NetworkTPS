@@ -27,6 +27,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Animation)
 	float dirV = 0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Animation)
+	bool bIsDead = false;
+	
 	UPROPERTY()
 	class ANetTPSCharacter* player;
 

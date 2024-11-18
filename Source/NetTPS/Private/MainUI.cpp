@@ -28,6 +28,15 @@ void UMainUI::PopBullet(int32 index)
 	BulletPanel->RemoveChildAt(index);
 }
 
+void UMainUI::PopAllBullet()
+{
+	int32 RemainingBullets = BulletPanel->GetChildrenCount();
+	for(int32 i = RemainingBullets - 1; i >= 0; i--)
+	{
+		PopBullet(i);
+	}
+}
+
 void UMainUI::NativeConstruct()
 {
 	Super::NativeConstruct();
