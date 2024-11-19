@@ -83,6 +83,23 @@ void ANetTPSCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	FVector pos = FMath::Lerp(CameraBoom->GetRelativeLocation(), OriginCamPos, DeltaTime * 10);
 	CameraBoom->SetRelativeLocation(pos);
+
+	PrintNetLog();
+}
+
+void ANetTPSCharacter::PrintNetLog()
+{
+	FString connStr = GetNetConnection() != nullptr ? TEXT("Valid Connection") : TEXT("Invalid Connection");
+	FString ownerStr = GetOwner() != nullptr ? GetOwner()->GetName() : TEXT("No Owner");
+	FString role = UEnum::GetValueAsString<ENetRole>(GetLocalRole());
+	FString isMine = IsLocallyControlled() ? TEXT("내 것") : TEXT("남의 것");
+	FString logStr = FString::Printf(TEXT("Connection : %s\nOwner : %s\nRole : %s\nMine : %s"),
+		*connStr,
+		*ownerStr,
+		*role,
+		*isMine);
+	
+	DrawDebugString(GetWorld(), GetActorLocation(), logStr, nullptr, FColor::Yellow, 0, true, 1);
 }
 
 //////////////////////////////////////////////////////////////////////////
