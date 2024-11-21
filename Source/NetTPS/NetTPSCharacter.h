@@ -61,14 +61,28 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 
+	UFUNCTION(Server, Reliable)
+	void ServerRPC_TakePistol();
 	void TakePistol();
 
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_AttachPistol(class APistol* Pistol);
 	void AttachPistol(class APistol* Pistol);
 
-	void DetachPistol();
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_DetachPistol(APistol* Pistol);
+	void DetachPistol(APistol* Pistol);
 
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_Fire(bool bHit, FHitResult Hit);
+	UFUNCTION(Server, Reliable)
+	void ServerRPC_Fire(bool bHit, FHitResult Hit);
 	void Fire();
 
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_Reload();
+	UFUNCTION(Server, Reliable)
+	void ServerRPC_Reload();
 	void Reload();
 	
 	void InitMainUIWidget();
@@ -77,8 +91,8 @@ public:
 	void ReloadFinish();
 
 	void InitBulletUI();
-	
-	
+
+	void BillboardHP();
 public:
 	UPROPERTY(EditAnywhere)
 	USceneComponent* CompGun;
@@ -136,3 +150,4 @@ public:
 
 	void PrintNetLog();
 };
+

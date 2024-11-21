@@ -17,6 +17,7 @@
 #include "MainUI.h"
 #include "Pistol.h"
 #include "Components/WidgetComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -85,6 +86,7 @@ void ANetTPSCharacter::Tick(float DeltaTime)
 	CameraBoom->SetRelativeLocation(pos);
 
 	PrintNetLog();
+	BillboardHP();
 }
 
 void ANetTPSCharacter::PrintNetLog()
@@ -180,7 +182,7 @@ void ANetTPSCharacter::Look(const FInputActionValue& Value)
 	}
 }
 
-void ANetTPSCharacter::TakePistol()
+void ANetTPSCharacter::ServerRPC_TakePistol_Implementation()
 {
 	// if no gun is possessed, grab gun in range
 	if (bHasPistol == false)
@@ -209,13 +211,30 @@ void ANetTPSCharacter::TakePistol()
 					}
 				}
 			}
-			AttachPistol(ClosestPistol);
+			if(ClosestPistol)
+			{
+				//Set Owner
+				ClosestPistol->SetOwner(this);
+			
+				MulticastRPC_AttachPistol(ClosestPistol);
+			}
 		}
 	}
 	else
 	{
-		DetachPistol();
+		OwnedPistol->SetOwner(nullptr);
+		MulticastRPC_DetachPistol(OwnedPistol);
 	}
+}
+
+void ANetTPSCharacter::TakePistol()
+{
+	ServerRPC_TakePistol();
+}
+
+void ANetTPSCharacter::MulticastRPC_AttachPistol_Implementation(APistol* Pistol)
+{
+	AttachPistol(Pistol);
 }
 
 void ANetTPSCharacter::AttachPistol(APistol* Pistol)
@@ -232,16 +251,21 @@ void ANetTPSCharacter::AttachPistol(APistol* Pistol)
 		OwnedPistol = Pistol;
 		bUseControllerRotationYaw = true;
 		GetCharacterMovement()->bOrientRotationToMovement = false;
-		CameraBoom->TargetArmLength = 150;
-		OriginCamPos = FVector(0, 40, 60);
-
-		//crosshair show
-		MainUI->ShowCrossHair(true);
-		InitBulletUI();
+		if(IsLocallyControlled())
+		{
+			CameraBoom->TargetArmLength = 150;
+			OriginCamPos = FVector(0, 40, 60);
+			InitBulletUI();
+		}
 	}
 }
 
-void ANetTPSCharacter::DetachPistol()
+void ANetTPSCharacter::MulticastRPC_DetachPistol_Implementation(APistol* Pistol)
+{
+	DetachPistol(Pistol);
+}
+
+void ANetTPSCharacter::DetachPistol(APistol* Pistol)
 {
 	if (!OwnedPistol) return;
 
@@ -250,40 +274,26 @@ void ANetTPSCharacter::DetachPistol()
 	{
 		comp->SetSimulatePhysics(true);
 		
-		OwnedPistol->DetachFromActor(FDetachmentTransformRules::KeepRelativeTransform);
-		OwnedPistol->SetOwner(nullptr);
+		Pistol->DetachFromActor(FDetachmentTransformRules::KeepRelativeTransform);
+		Pistol->SetOwner(nullptr);
 		bHasPistol = false;
 		OwnedPistol = nullptr;
 		bUseControllerRotationYaw = false;
 		GetCharacterMovement()->bOrientRotationToMovement = true;
-		CameraBoom->TargetArmLength = 300;
-		OriginCamPos = FVector(0, 0, 60);
-
-		MainUI->PopAllBullet();
-		MainUI->ShowCrossHair(false);
 		
+		if(IsLocallyControlled())
+		{
+			CameraBoom->TargetArmLength = 300;
+			OriginCamPos = FVector(0, 0, 60);
+			MainUI->PopAllBullet();
+			MainUI->ShowCrossHair(false);
+		}
 	}
 }
 
-void ANetTPSCharacter::Fire()
+void ANetTPSCharacter::MulticastRPC_Fire_Implementation(bool bHit, FHitResult Hit)
 {
-	// if no gun is possesed, return
-	if(!bHasPistol) return;
-
-	if(OwnedPistol->CurrentBulletCount <= 0)return;
-
-	if(bIsReloading) return;
-	
-	// Find Collision point by LineTrace
-	FVector startPos = FollowCamera->GetComponentLocation();
-	FVector endPos = startPos + FollowCamera->GetForwardVector() * 100000;
-	
-	FCollisionQueryParams params;
-	params.AddIgnoredActor(this);
-
-	FHitResult Hit;
-	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, startPos, endPos, ECollisionChannel::ECC_Visibility, params);
-	if(bHit)
+	if (bHit)
 	{
 		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), GunEffect, Hit.Location, FRotator::ZeroRotator, true);
 
@@ -299,19 +309,60 @@ void ANetTPSCharacter::Fire()
 	{
 		Reload();
 	}
-	MainUI->PopBullet(OwnedPistol->CurrentBulletCount);
+	if(IsLocallyControlled())
+	{
+		MainUI->PopBullet(OwnedPistol->CurrentBulletCount);
+	}
 }
 
-void ANetTPSCharacter::Reload()
+void ANetTPSCharacter::ServerRPC_Fire_Implementation(bool bHit, FHitResult Hit)
+{
+	MulticastRPC_Fire(bHit, Hit);
+}
+
+void ANetTPSCharacter::Fire()
+{
+	// if no gun is possesed, return
+	if(!bHasPistol) return;
+	
+	if(OwnedPistol->CurrentBulletCount <= 0)return;
+
+	if(bIsReloading) return;
+	
+	// Find Collision point by LineTrace
+	FVector startPos = FollowCamera->GetComponentLocation();
+	FVector endPos = startPos + FollowCamera->GetForwardVector() * 100000;
+	
+	FCollisionQueryParams params;
+	params.AddIgnoredActor(this);
+
+	FHitResult Hit;
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, startPos, endPos, ECollisionChannel::ECC_Visibility, params);
+
+	ServerRPC_Fire(bHit, Hit);
+}
+
+void ANetTPSCharacter::MulticastRPC_Reload_Implementation()
+{
+	PlayAnimMontage(FireMontage, 1, TEXT("Reload"));
+}
+
+void ANetTPSCharacter::ServerRPC_Reload_Implementation()
 {
 	if(!bHasPistol) return;
 
 	if(OwnedPistol->CurrentBulletCount == OwnedPistol->MaxBulletCount)return;
 
 	if(bIsReloading) return;
+	
 	bIsReloading = true;
 	
-	PlayAnimMontage(FireMontage, 1, TEXT("Reload"));
+	MulticastRPC_Reload();
+}
+
+void ANetTPSCharacter::Reload()
+{
+	ServerRPC_Reload();
 }
 
 void ANetTPSCharacter::ReloadFinish()
@@ -321,8 +372,26 @@ void ANetTPSCharacter::ReloadFinish()
 	bIsReloading = false;
 }
 
+void ANetTPSCharacter::BillboardHP()
+{
+	//Find Camera
+	AActor* Camera = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
+	//Find Camera Forward Vector
+	FVector Forward = Camera->GetActorForwardVector();
+	//Find Camera Up Vector
+	FVector Up = Camera->GetActorUpVector();
+	//Get the rotation of HP bar using two vectors
+	FRotator Rot = UKismetMathLibrary::MakeRotFromXZ(Forward, Up);
+	CompHP->SetWorldRotation(Rot);
+}
+
+
 void ANetTPSCharacter::InitBulletUI()
 {
+	if(IsLocallyControlled() == false) return;
+	//crosshair show
+	MainUI->ShowCrossHair(true);
+	
 	MainUI->PopAllBullet();
 	for(int i = 0 ; i < OwnedPistol->CurrentBulletCount; i++)
 	{
@@ -332,18 +401,23 @@ void ANetTPSCharacter::InitBulletUI()
 
 void ANetTPSCharacter::InitMainUIWidget()
 {
+	if(IsLocallyControlled() == false) return;
 	MainUI = Cast<UMainUI>(CreateWidget(GetWorld(), MainUIClass));
 	MainUI->AddToViewport();
-	// CurrentBulletCount = MaxBulletCount;
-	// for(int i = 0; i < CurrentBulletCount; i++)
-	// {
-	// 	MainUI->AddBullet();
-	// }
+	//CompHP->SetVisibility(false);
 }
 
 void ANetTPSCharacter::DamageProcess(float Damage)
 {
-	UHealthBar* HPBar = Cast<UHealthBar>(CompHP->GetWidget());
+	UHealthBar* HPBar = nullptr;
+	if(IsLocallyControlled())
+	{
+		HPBar = MainUI->HealthBar;
+	}
+	else
+	{
+		HPBar = Cast<UHealthBar>(CompHP->GetWidget());
+	}
 	float CurrentHP = HPBar->UpdateHPBar(Damage);
 	if(CurrentHP <= 0)
 	{

@@ -22,7 +22,10 @@ public:
 	class UHorizontalBox* BulletPanel;
 
 	UPROPERTY(EditDefaultsOnly)
-	TSubclassOf<UUserWidget> BulletUIClass; 
+	TSubclassOf<UUserWidget> BulletUIClass;
+
+	UPROPERTY(meta = (BindWidget))
+	class UHealthBar* HealthBar;
 public:
 	void ShowCrossHair(bool bIsVisible);
 

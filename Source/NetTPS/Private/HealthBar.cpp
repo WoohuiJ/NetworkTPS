@@ -4,6 +4,7 @@
 #include "HealthBar.h"
 #include "Components/ProgressBar.h"
 
+
 float UHealthBar::UpdateHPBar(float Damage)
 {
 	CurrentHP -= Damage;
