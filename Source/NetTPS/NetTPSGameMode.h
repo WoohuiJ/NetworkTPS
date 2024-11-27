@@ -13,7 +13,13 @@ class ANetTPSGameMode : public AGameModeBase
 
 public:
 	ANetTPSGameMode();
+
+public:
+	UPROPERTY(VisibleAnywhere)
+	TArray<class ANetTPSCharacter*> AllPlayers;
+	
+	int32 TurnIndex = 0;
+public:
+	void AddPlayer(class ANetTPSCharacter* Player);
+	void ChangeTurn();
 };
-
-
-

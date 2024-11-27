@@ -13,3 +13,20 @@ ANetTPSGameMode::ANetTPSGameMode()
 		DefaultPawnClass = PlayerPawnBPClass.Class;
 	}
 }
+
+void ANetTPSGameMode::AddPlayer(class ANetTPSCharacter* Player)
+{
+	AllPlayers.Add(Player);
+}
+
+void ANetTPSGameMode::ChangeTurn()
+{
+	AllPlayers[TurnIndex]->bCanMakeCube = false;
+	TurnIndex++;
+
+	if (TurnIndex >= AllPlayers.Num())
+	{
+		TurnIndex = 0;
+	}
+	AllPlayers[TurnIndex]->bCanMakeCube = true;
+}

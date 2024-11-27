@@ -36,4 +36,7 @@ public:
 public:
 	UFUNCTION()
 	void AnimNotify_OnReloadFinish();
+
+	UFUNCTION()
+	void AnimNotify_OnDeath();
 };

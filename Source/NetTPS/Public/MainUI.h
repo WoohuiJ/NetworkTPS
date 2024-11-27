@@ -26,6 +26,9 @@ public:
 
 	UPROPERTY(meta = (BindWidget))
 	class UHealthBar* HealthBar;
+
+	UPROPERTY(meta = (BindWidget))
+	class UButton* Btn_Retry;
 public:
 	void ShowCrossHair(bool bIsVisible);
 
@@ -34,6 +37,12 @@ public:
 	void PopBullet(int32 index);
 
 	void PopAllBullet();
+
+	void ShowBtnRetry(bool bIsVisible);
+
+	UFUNCTION()
+	void OnRetry();
+	
 protected:
 	virtual void NativeConstruct() override;
 };

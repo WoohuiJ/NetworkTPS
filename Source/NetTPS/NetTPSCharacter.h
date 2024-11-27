@@ -52,6 +52,9 @@ class ANetTPSCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = Input)
 	UInputAction* ReloadAction;
+
+	UPROPERTY(EditAnywhere, Category = Input)
+	UInputAction* MakeCubeAction;
 public:
 	ANetTPSCharacter();
 protected:
@@ -64,10 +67,9 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRPC_TakePistol();
 	void TakePistol();
-
-	UFUNCTION(NetMulticast, Reliable)
-	void MulticastRPC_AttachPistol(class APistol* Pistol);
-	void AttachPistol(class APistol* Pistol);
+	
+	UFUNCTION()
+	void AttachPistol();
 
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastRPC_DetachPistol(APistol* Pistol);
@@ -84,15 +86,25 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRPC_Reload();
 	void Reload();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_MakeCube(FVector Pos, FRotator Rot);
+	UFUNCTION(Server, Reliable)
+	void ServerRPC_MakeCube();
+	void MakeCube();
 	
 	void InitMainUIWidget();
-
+	
+	UFUNCTION(Client, Reliable)
+	void ClientRPC_Init();
 public:
 	void ReloadFinish();
 
 	void InitBulletUI();
 
 	void BillboardHP();
+
+	void DeathProcess();
 public:
 	UPROPERTY(EditAnywhere)
 	USceneComponent* CompGun;
@@ -105,8 +117,8 @@ public:
 	UPROPERTY(EditAnywhere)
 	FVector OriginCamPos;
 
-	UPROPERTY(EditAnywhere)
-	class APistol* OwnedPistol = nullptr;
+	UPROPERTY(ReplicatedUsing = AttachPistol)
+	APistol* OwnedPistol = nullptr;
 
 	UPROPERTY(EditAnywhere)
 	class UParticleSystem* GunEffect;
@@ -134,6 +146,12 @@ public:
 	void DamageProcess(float Damage);
 	
 	bool bIsDead= false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSubclassOf<AActor> CubeClass;
+
+	UPROPERTY(Replicated)
+	bool bCanMakeCube = false;
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -142,6 +160,10 @@ protected:
 	virtual void BeginPlay();
 	
 	virtual void Tick(float DeltaTime) override;
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	virtual void PossessedBy(AController* NewController) override;
 public:
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -150,4 +172,3 @@ public:
 
 	void PrintNetLog();
 };
-

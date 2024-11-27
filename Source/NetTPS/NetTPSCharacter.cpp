@@ -15,9 +15,11 @@
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "MainUI.h"
+#include "NetTPSGameMode.h"
 #include "Pistol.h"
 #include "Components/WidgetComponent.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Net/UnrealNetwork.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -75,8 +77,23 @@ void ANetTPSCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
-	InitMainUIWidget();
+
+	FString isServer = HasAuthority() ? TEXT("서버") : TEXT("클라");
+	UE_LOG(LogTemp, Warning, TEXT("%s - BeginPlay : %s"), *isServer, *GetActorNameOrLabel());
 	OriginCamPos = CameraBoom->GetRelativeLocation();
+
+	if (HasAuthority())
+	{
+		ANetTPSGameMode* GM = Cast<ANetTPSGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM)
+		{
+			GM->AddPlayer(this);
+		}
+		if (IsLocallyControlled())
+		{
+			bCanMakeCube = true;
+		}
+	}
 }
 
 void ANetTPSCharacter::Tick(float DeltaTime)
@@ -87,6 +104,21 @@ void ANetTPSCharacter::Tick(float DeltaTime)
 
 	PrintNetLog();
 	BillboardHP();
+}
+
+void ANetTPSCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ANetTPSCharacter, bCanMakeCube);
+	DOREPLIFETIME(ANetTPSCharacter, OwnedPistol);
+}
+
+//
+void ANetTPSCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	UE_LOG(LogTemp, Warning, TEXT("PossessedBy : %s"), *GetActorNameOrLabel());
+	ClientRPC_Init();
 }
 
 void ANetTPSCharacter::PrintNetLog()
@@ -139,6 +171,8 @@ void ANetTPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 		// Reload Pistol
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ANetTPSCharacter::Reload);
+		
+	//	EnhancedInputComponent->BindAction(MakeCubeAction, ETriggerEvent::Started, this, &ANetTPSCharacter::MakeCube);
 	}
 	else
 	{
@@ -213,17 +247,18 @@ void ANetTPSCharacter::ServerRPC_TakePistol_Implementation()
 			}
 			if(ClosestPistol)
 			{
-				//Set Owner
-				ClosestPistol->SetOwner(this);
-			
-				MulticastRPC_AttachPistol(ClosestPistol);
+				OwnedPistol = ClosestPistol;
+				OwnedPistol->SetOwner(this);
+				AttachPistol();
 			}
 		}
 	}
 	else
 	{
+		APistol* Pistol = OwnedPistol;
 		OwnedPistol->SetOwner(nullptr);
-		MulticastRPC_DetachPistol(OwnedPistol);
+		OwnedPistol = nullptr;
+		MulticastRPC_DetachPistol(Pistol);
 	}
 }
 
@@ -232,23 +267,16 @@ void ANetTPSCharacter::TakePistol()
 	ServerRPC_TakePistol();
 }
 
-void ANetTPSCharacter::MulticastRPC_AttachPistol_Implementation(APistol* Pistol)
+void ANetTPSCharacter::AttachPistol()
 {
-	AttachPistol(Pistol);
-}
-
-void ANetTPSCharacter::AttachPistol(APistol* Pistol)
-{
-	if (!Pistol) return;
-
-	UStaticMeshComponent* comp = Pistol->FindComponentByClass<UStaticMeshComponent>();
+	if(OwnedPistol == nullptr) return;	
+	UStaticMeshComponent* comp = OwnedPistol->FindComponentByClass<UStaticMeshComponent>();
 	if (comp)
 	{
 		comp->SetSimulatePhysics(false);
-		Pistol->AttachToComponent(CompGun, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-		Pistol->SetOwner(this);
+		OwnedPistol->AttachToComponent(CompGun, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		OwnedPistol->SetOwner(this);
 		bHasPistol = true;
-		OwnedPistol = Pistol;
 		bUseControllerRotationYaw = true;
 		GetCharacterMovement()->bOrientRotationToMovement = false;
 		if(IsLocallyControlled())
@@ -267,9 +295,7 @@ void ANetTPSCharacter::MulticastRPC_DetachPistol_Implementation(APistol* Pistol)
 
 void ANetTPSCharacter::DetachPistol(APistol* Pistol)
 {
-	if (!OwnedPistol) return;
-
-	UStaticMeshComponent* comp = OwnedPistol->FindComponentByClass<UStaticMeshComponent>();
+	UStaticMeshComponent* comp = Pistol->FindComponentByClass<UStaticMeshComponent>();
 	if (comp)
 	{
 		comp->SetSimulatePhysics(true);
@@ -277,7 +303,6 @@ void ANetTPSCharacter::DetachPistol(APistol* Pistol)
 		Pistol->DetachFromActor(FDetachmentTransformRules::KeepRelativeTransform);
 		Pistol->SetOwner(nullptr);
 		bHasPistol = false;
-		OwnedPistol = nullptr;
 		bUseControllerRotationYaw = false;
 		GetCharacterMovement()->bOrientRotationToMovement = true;
 		
@@ -365,6 +390,27 @@ void ANetTPSCharacter::Reload()
 	ServerRPC_Reload();
 }
 
+void ANetTPSCharacter::MulticastRPC_MakeCube_Implementation(FVector Pos, FRotator Rot)
+{
+	FActorSpawnParameters SpawnParameters;
+	GetWorld()->SpawnActor<AActor>(CubeClass, Pos, Rot, SpawnParameters);
+}
+
+void ANetTPSCharacter::ServerRPC_MakeCube_Implementation()
+{
+	ANetTPSGameMode* GM = Cast<ANetTPSGameMode>(GetWorld()->GetAuthGameMode());
+	GM->ChangeTurn();
+	FVector SpawnLocation = GetActorLocation() + GetActorForwardVector() * 100;
+	FRotator SpawnRotation = GetActorRotation();
+	MulticastRPC_MakeCube(SpawnLocation, SpawnRotation);
+}
+
+void ANetTPSCharacter::MakeCube()
+{
+	if(!bCanMakeCube)return;
+	ServerRPC_MakeCube();
+}
+
 void ANetTPSCharacter::ReloadFinish()
 {
 	OwnedPistol->Reload();
@@ -377,7 +423,7 @@ void ANetTPSCharacter::BillboardHP()
 	//Find Camera
 	AActor* Camera = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
 	//Find Camera Forward Vector
-	FVector Forward = Camera->GetActorForwardVector();
+	FVector Forward = -Camera->GetActorForwardVector();
 	//Find Camera Up Vector
 	FVector Up = Camera->GetActorUpVector();
 	//Get the rotation of HP bar using two vectors
@@ -404,7 +450,12 @@ void ANetTPSCharacter::InitMainUIWidget()
 	if(IsLocallyControlled() == false) return;
 	MainUI = Cast<UMainUI>(CreateWidget(GetWorld(), MainUIClass));
 	MainUI->AddToViewport();
-	//CompHP->SetVisibility(false);
+	CompHP->SetVisibility(false);
+}
+
+void ANetTPSCharacter::ClientRPC_Init_Implementation()
+{
+	InitMainUIWidget();
 }
 
 void ANetTPSCharacter::DamageProcess(float Damage)
@@ -422,5 +473,26 @@ void ANetTPSCharacter::DamageProcess(float Damage)
 	if(CurrentHP <= 0)
 	{
 		bIsDead = true;
+		GetCharacterMovement()->DisableMovement();
+
+		GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		
+		
+		if(bHasPistol && IsLocallyControlled())
+		{
+			TakePistol();
+		}
 	}
+}
+
+void ANetTPSCharacter::DeathProcess()
+{
+	if(IsLocallyControlled() == false) return;
+	FollowCamera->PostProcessSettings.ColorSaturation = FVector4(0,0,0,1);
+	APlayerController* PC = Cast<APlayerController>(Controller);
+	PC->SetShowMouseCursor(true);
+	MainUI->ShowCrossHair(true);
+	MainUI->ShowBtnRetry(true);
 }

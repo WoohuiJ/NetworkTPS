@@ -2,6 +2,9 @@
 
 
 #include "MainUI.h"
+
+#include "NetPlayerController.h"
+#include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/HorizontalBox.h"
 
@@ -37,9 +40,36 @@ void UMainUI::PopAllBullet()
 	}
 }
 
+void UMainUI::ShowBtnRetry(bool bIsVisible)
+{
+	if(bIsVisible)
+	{
+		Btn_Retry->SetVisibility(ESlateVisibility::Visible);
+	}
+	else
+	{
+		Btn_Retry->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+void UMainUI::OnRetry()
+{
+	ANetPlayerController* PC = Cast<ANetPlayerController>(GetWorld()->GetFirstPlayerController());
+	if(PC)
+	{
+		PC->SetShowMouseCursor(false);
+		//change to spectator mode
+		PC->ServerRPC_ChangeToSpectator();
+	}
+	//Remove Main UI
+	RemoveFromParent();
+}
+
 void UMainUI::NativeConstruct()
 {
 	Super::NativeConstruct();
 	CrossHairImage = Cast<UImage>(GetWidgetFromName(TEXT("CrossHair")));
 	ShowCrossHair(false);
+	ShowBtnRetry(false);
+	Btn_Retry->OnClicked.AddDynamic(this, &UMainUI::OnRetry);
 }

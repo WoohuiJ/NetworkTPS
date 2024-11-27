@@ -33,3 +33,8 @@ void UNetPlayerAnimInstance::AnimNotify_OnReloadFinish()
 {
 	player->ReloadFinish();
 }
+
+void UNetPlayerAnimInstance::AnimNotify_OnDeath()
+{
+	player->DeathProcess();
+}
