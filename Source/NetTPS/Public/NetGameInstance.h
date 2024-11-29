@@ -7,6 +7,8 @@
 #include "Interfaces/OnlineSessionInterface.h"
 #include "NetGameInstance.generated.h"
 
+DECLARE_DELEGATE_TwoParams(FAddSession, int32, FString);
+DECLARE_DELEGATE_OneParam(FFindComplete, bool);
 /**
  * 
  */
@@ -27,9 +29,15 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void FindOtherSession();
 	void OnFindSessionComplete(bool bWasSuccessful);
+
+	void JoinOtherSession(int32 index);
+	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 public:
 	// Manages All actions in Session
 	IOnlineSessionPtr SessionInterface;
 
 	TSharedPtr<FOnlineSessionSearch> SessionSearch;
+
+	FAddSession OnAddSession;
+	FFindComplete OnFindComplete;
 };

@@ -13,5 +13,14 @@ UCLASS()
 class NETTPS_API ALobbyGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
-	
+
+public:
+    virtual void BeginPlay() override;
+
+public:
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<class ULobbyUI> LobbyUIClass;
+
+	UPROPERTY()
+	ULobbyUI* LobbyUI;
 };

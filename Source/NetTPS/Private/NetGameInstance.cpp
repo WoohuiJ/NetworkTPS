@@ -22,6 +22,7 @@ void UNetGameInstance::Init()
 		SessionInterface->OnCreateSessionCompleteDelegates.AddUObject(this, &UNetGameInstance::OnCreateSessionComplete);
 		SessionInterface->OnDestroySessionCompleteDelegates.AddUObject(this, &UNetGameInstance::OnDestroySessionComplete);
 		SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(this, &UNetGameInstance::OnFindSessionComplete);
+		SessionInterface->OnJoinSessionCompleteDelegates.AddUObject(this, &UNetGameInstance::OnJoinSessionComplete);
 	}
 }
 
@@ -59,6 +60,8 @@ void UNetGameInstance::OnCreateSessionComplete(FName SessionName, bool bWasSucce
 	if(bWasSuccessful)
 	{
 		UE_LOG(LogTemp,Warning, TEXT("[%s]Session Creation Success"), *SessionName.ToString());
+		//if succeeded, creator moves to session
+		GetWorld()->ServerTravel(TEXT("/Game/Net/Maps/BattleMap?listen"));
 	}
 	else
 	{
@@ -85,6 +88,7 @@ void UNetGameInstance::OnDestroySessionComplete(FName SessionName, bool bWasSucc
 
 void UNetGameInstance::FindOtherSession()
 {
+	OnFindComplete.ExecuteIfBound(false);
 	SessionSearch = MakeShared<FOnlineSessionSearch>();
 	FName SubsysName = IOnlineSubsystem::Get()->GetSubsystemName();
 	SessionSearch->bIsLanQuery = SubsysName.IsEqual(FName(TEXT("NULL")));
@@ -99,7 +103,7 @@ void UNetGameInstance::OnFindSessionComplete(bool bWasSuccessful)
 	if(bWasSuccessful)
 	{
 		auto results = SessionSearch->SearchResults;
-		for(int i = 0; i < results.Num(); i++)
+		for(int32 i = 0; i < results.Num(); i++)
 		{
 			FOnlineSessionSearchResult SR = results[i];
 			FString DisplayName;
@@ -107,10 +111,34 @@ void UNetGameInstance::OnFindSessionComplete(bool bWasSuccessful)
 			//
 			FString SessionCreator = SR.Session.OwningUserName;
 			UE_LOG(LogTemp,Warning, TEXT("Session : %s, Creator : %s"),  *DisplayName, *SessionCreator);
+
+			FString SessionInfo = FString::Printf(TEXT("%s : %s"),  *DisplayName, *SessionCreator);
+			OnAddSession.ExecuteIfBound(i, SessionInfo);
 		}
 	}
-	else
+
+	UE_LOG(LogTemp,Warning, TEXT("Session Search Complete"));
+	OnFindComplete.ExecuteIfBound(true);
+	
+}
+
+void UNetGameInstance::JoinOtherSession(int32 index)
+{
+	auto results = SessionSearch->SearchResults;
+
+	FString DisplayName;
+	results[index].Session.SessionSettings.Get(TEXT("DP_NAME"), DisplayName);
+
+	SessionInterface->JoinSession(0, FName(DisplayName), results[index]);
+}
+
+void UNetGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
+{
+	if(Result == EOnJoinSessionCompleteResult::Success)
 	{
-		UE_LOG(LogTemp,Warning, TEXT("Session Search Complete"))
+		FString URL;
+		SessionInterface->GetResolvedConnectString(SessionName, URL);
+		APlayerController* PC = GetWorld()->GetFirstPlayerController();
+		PC->ClientTravel(URL,TRAVEL_Absolute);
 	}
 }

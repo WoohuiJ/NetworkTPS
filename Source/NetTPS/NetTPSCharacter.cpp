@@ -9,15 +9,18 @@
 #include "GameFramework/Controller.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "GameUI.h"
 #include "HealthBar.h"
 #include "InputActionValue.h"
 #include "MovieSceneTracksComponentTypes.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "MainUI.h"
+#include "NetGameState.h"
 #include "NetTPSGameMode.h"
 #include "Pistol.h"
 #include "Components/WidgetComponent.h"
+#include "GameFramework/PlayerState.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 
@@ -121,6 +124,12 @@ void ANetTPSCharacter::PossessedBy(AController* NewController)
 	ClientRPC_Init();
 }
 
+void ANetTPSCharacter::OnPlayerStateChanged(APlayerState* NewPlayerState, APlayerState* OldPlayerState)
+{
+	Super::OnPlayerStateChanged(NewPlayerState, OldPlayerState);
+	ANetGameState* GameState = Cast<ANetGameState>(GetWorld()->GetGameState());
+	GameState->GetGameUI()->AddPlayerStateUI(NewPlayerState); 
+}
 void ANetTPSCharacter::PrintNetLog()
 {
 	FString connStr = GetNetConnection() != nullptr ? TEXT("Valid Connection") : TEXT("Invalid Connection");
@@ -342,6 +351,13 @@ void ANetTPSCharacter::MulticastRPC_Fire_Implementation(bool bHit, FHitResult Hi
 
 void ANetTPSCharacter::ServerRPC_Fire_Implementation(bool bHit, FHitResult Hit)
 {
+	ANetTPSCharacter* Player = Cast<ANetTPSCharacter>(Hit.GetActor());
+	if(Player)
+	{
+		APlayerState* PS = GetPlayerState();
+		PS->SetScore(PS->GetScore() + 1 );
+		PS->OnRep_Score();
+	}
 	MulticastRPC_Fire(bHit, Hit);
 }
 
