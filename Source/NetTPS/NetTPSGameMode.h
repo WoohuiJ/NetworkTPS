@@ -19,6 +19,8 @@ public:
 	TArray<class ANetTPSCharacter*> AllPlayers;
 	
 	int32 TurnIndex = 0;
+
+	int32 PosIndex = 0;
 public:
 	void AddPlayer(class ANetTPSCharacter* Player);
 	void ChangeTurn();

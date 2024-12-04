@@ -23,7 +23,7 @@ public:
 	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
 
 	UFUNCTION(BlueprintCallable)
-	void DestroyMySession(FString SessionName);
+	void DestroyMySession();
 	void OnDestroySessionComplete(FName SessionName, bool bWasSuccessful);
 
 	UFUNCTION(BlueprintCallable)
@@ -40,4 +40,6 @@ public:
 
 	FAddSession OnAddSession;
 	FFindComplete OnFindComplete;
+
+	FName CurrentSessionName;
 };

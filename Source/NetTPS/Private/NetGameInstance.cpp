@@ -7,6 +7,7 @@
 #include "Online/OnlineSessionNames.h"
 
 #include "Interfaces/OnlineSessionInterface.h"
+#include "Kismet/GameplayStatics.h"
 
 
 void UNetGameInstance::Init()
@@ -61,6 +62,7 @@ void UNetGameInstance::OnCreateSessionComplete(FName SessionName, bool bWasSucce
 	{
 		UE_LOG(LogTemp,Warning, TEXT("[%s]Session Creation Success"), *SessionName.ToString());
 		//if succeeded, creator moves to session
+		CurrentSessionName = SessionName;
 		GetWorld()->ServerTravel(TEXT("/Game/Net/Maps/BattleMap?listen"));
 	}
 	else
@@ -69,9 +71,9 @@ void UNetGameInstance::OnCreateSessionComplete(FName SessionName, bool bWasSucce
 	}
 }
 
-void UNetGameInstance::DestroyMySession(FString SessionName)
+void UNetGameInstance::DestroyMySession()
 {
-	SessionInterface->DestroySession(FName(SessionName));
+	SessionInterface->DestroySession(CurrentSessionName);
 }
 
 void UNetGameInstance::OnDestroySessionComplete(FName SessionName, bool bWasSuccessful)
@@ -79,6 +81,7 @@ void UNetGameInstance::OnDestroySessionComplete(FName SessionName, bool bWasSucc
 	if(bWasSuccessful)
 	{
 		UE_LOG(LogTemp,Warning, TEXT("[%s]Session Destruction Success"), *SessionName.ToString());
+		UGameplayStatics::OpenLevel(GetWorld(), TEXT("Lv_Lobby"));
 	}
 	else
 	{
@@ -137,6 +140,7 @@ void UNetGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSessionCo
 	if(Result == EOnJoinSessionCompleteResult::Success)
 	{
 		FString URL;
+		CurrentSessionName = SessionName;
 		SessionInterface->GetResolvedConnectString(SessionName, URL);
 		APlayerController* PC = GetWorld()->GetFirstPlayerController();
 		PC->ClientTravel(URL,TRAVEL_Absolute);

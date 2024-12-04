@@ -21,4 +21,9 @@ public:
 	virtual void OnRep_Score() override;
 
 	FUpdateScore OnUpdateScore;
+
+	UFUNCTION(Server, Reliable)
+	void ServerRPC_SendChat(const FString& Chat);
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_SendChat(const FString& Chat);
 };

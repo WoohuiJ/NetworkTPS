@@ -15,8 +15,13 @@ class NETTPS_API ANetPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
+	virtual void Tick(float DeltaTime) override;
+	
 	UFUNCTION(Server, Reliable)
 	void ServerRPC_ChangeToSpectator();
 
 	void RespawnPlayer();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPC_DestroySession();
 };

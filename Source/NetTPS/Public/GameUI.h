@@ -23,9 +23,30 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<class UPlayerStateUI> PlayerStateUIClass;
+	
+	UPROPERTY()
+	TArray<class UPlayerStateUI*> allPlayerState;
+
+	UPROPERTY(meta = (BindWidget))
+	class UEditableTextBox* edit_chat;
+	UPROPERTY(meta = (BindWidget))
+	class UScrollBox* scroll_chat;
+	// UPROPERTY(EditDefaultsOnly)
+	// TSubclassOf<class UChatItem> chatItemFactory;
+
+	UPROPERTY(meta = (BindWidget))
+	class UBorder* emptyBorder;
+
 public:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	void AddPlayerStateUI(class APlayerState* PS);
+
+	void AddChat(FString Chat);
 	
+	UFUNCTION()
+	void OnTextBoxCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+	//
+	// UFUNCTION()
+	// FEventReply OnPointerEvent(FGeometry MyGeometry, const FPointerEvent& MouseEvent);
 };

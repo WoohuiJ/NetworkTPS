@@ -3,6 +3,7 @@
 
 #include "GameUI.h"
 
+#include "NetGameState.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "PlayerStateUI.h"
@@ -10,6 +11,8 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/ScrollBox.h"
+#include "Components/EditableTextBox.h"
 
 
 class FPlayerStateSort
@@ -57,3 +60,20 @@ void UGameUI::AddPlayerStateUI(APlayerState* PS)
 	_Slot->SetHorizontalAlignment(EHorizontalAlignment::HAlign_Right);
 	_Slot->SetPadding(FMargin(0,0,20,0));
 }
+
+void UGameUI::AddChat(FString Chat)
+{
+	
+}
+
+void UGameUI::OnTextBoxCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	
+}
+
+// FEventReply UGameUI::OnPointerEvent(FGeometry MyGeometry, const FPointerEvent& MouseEvent)
+// {
+// 	//Cast<ANetGameState>(GetWorld()->GetGameState())->ShowCursor(false);
+//
+// 	return FEventReply();
+// }
